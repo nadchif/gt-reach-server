@@ -1,0 +1,12 @@
+node_modules
+dist
+.env
+.dockerignore
+.vscode
+*.skip
+.env.sample
+.vercel
+.serviceAccountKey.json
+.DS_Store
+timescale
+.git
