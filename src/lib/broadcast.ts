@@ -16,6 +16,7 @@ export class Broadcast {
   isTranscriberConnected = false;
   isConnecting = false;
   disconnectionTimeout: NodeJS.Timeout | null = null;
+  lastTranscribedText = '';
 
   constructor(ws: WebSocket, id: string, broadcasterId: string) {
     this.broadcastLanguage = 'en'; // FOR NOW;
@@ -29,7 +30,7 @@ export class Broadcast {
       apiKey: config.ASSEMBLY_AI_KEY,
     }).realtime.transcriber({
       sampleRate: 16_000,
-      endUtteranceSilenceThreshold: 2000,
+      endUtteranceSilenceThreshold: config.SILENCE_THRESHOLD,
     });
 
     this.transcriber.on('open', ({ sessionId }) => {
@@ -43,7 +44,7 @@ export class Broadcast {
               reason: 'MAX_STREAMING_TIME_EXCEEDED',
             })
           );
-        });
+        }, config.MAX_STREAMING_TIME);
         this.ws.send(
           JSON.stringify({
             type: EMessageType.BROADCAST_CLOSED,
@@ -93,10 +94,30 @@ export class Broadcast {
     return this.streamers;
   }
 
+  joinAudio(streamerId: string) {
+    const streamer = this.streamers.find((l) => l.id === streamerId);
+    if (!streamer) {
+      return;
+    }
+    streamer.isAudioSub = true;
+    logger.imp(`Streamer ${streamerId} joined audio`);
+    return this.streamers;
+  }
+
   leave(streamerId: string) {
     logger.log(`Streamer ${streamerId} left`);
     this.streamers = this.streamers.filter((l) => l.id !== streamerId);
     this.sendStateUpdate(EMessageType.STREAMER_LEFT);
+    return this.streamers;
+  }
+
+  leaveAudio(streamerId: string) {
+    logger.imp(`Streamer ${streamerId} left audio`);
+    const streamer = this.streamers.find((l) => l.id === streamerId);
+    if (!streamer) {
+      return;
+    }
+    streamer.isAudioSub = false;
     return this.streamers;
   }
 
@@ -107,6 +128,11 @@ export class Broadcast {
       }
       logger.log('upload...');
       this.transcriber.sendAudio(data);
+      this.streamers.forEach((streamer) => {
+        if (streamer.isAudioSub) {
+          streamer.ws.send(data);
+        }
+      });
     } catch (error) {
       logger.error('Error:', error);
     }
@@ -118,6 +144,7 @@ export class Broadcast {
     this.streamers.forEach((streamer) => {
       streamer.ws.send(JSON.stringify({ type: EMessageType.BROADCAST_CLOSED }));
     });
+    this.ws.send(JSON.stringify({ type: EMessageType.BROADCAST_CLOSED }));
     await this.disconnectTranscriber();
     this.streamers = [];
   }
@@ -145,19 +172,14 @@ export class Broadcast {
   }
 
   private handleTranscript = (transcript: RealtimeTranscript) => {
-    logger.log(`Received "${transcript.text}", type: ${transcript.message_type}`);
+    logger.log(`Received: "${transcript.text}", type: ${transcript.message_type}`);
     if (!transcript.text) {
       return;
+    } else if (transcript.text === this.lastTranscribedText) {
+      return;
     }
+    this.lastTranscribedText = transcript.text;
     this.sendForTranslations(transcript.text, transcript.message_type === 'FinalTranscript');
-
-    this.streamers.forEach((streamer) => {
-      streamer.ws.send(
-        JSON.stringify({
-          type: EMessageType.TRANSLATING,
-        })
-      );
-    });
   };
 
   private getSubscriberLanguages() {
@@ -178,6 +200,7 @@ export class Broadcast {
       params.append('to', language);
     }
     try {
+      logger.info(`Translate: "${text}"`);
       const res = await axios({
         baseURL: config.TRANSLATION_ENDPOINT,
         url: '/translate',

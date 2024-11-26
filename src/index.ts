@@ -22,9 +22,10 @@ const wss = new WebSocket.Server({
   server,
   verifyClient: (info, callback) => {
     const origin = info.origin;
-    if (origin && origin === config.ALLOWED_ORIGIN) {
+    if (origin && config.ALLOWED_ORIGIN.some((allowedOrigin) => origin.startsWith(allowedOrigin))) {
       callback(true);
     } else {
+      logger.warn(`Origin not allowed: ${origin}`);
       callback(false, 403, 'ORIGIN_NOT_ALLOWED');
     }
   },

@@ -6,6 +6,7 @@ export type TStreamer = {
   id: string;
   language: TLanguage;
   ws: WebSocket;
+  isAudioSub?: boolean;
 };
 
 export enum EMessageType {
@@ -21,4 +22,6 @@ export enum EMessageType {
   STREAMER_LEFT = 'STREAMER_LEFT',
   BROADCAST_CLOSED = 'BROADCAST_CLOSED',
   TRANSLATING = 'TRANSLATING',
+  JOIN_AUDIO = 'JOIN_AUDIO',
+  LEAVE_AUDIO = 'LEAVE_AUDIO',
 }

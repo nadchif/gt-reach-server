@@ -16,8 +16,21 @@ export const initWebSocketService = (wss: WebSocket.Server) => {
     clients.set(clientId, ws);
     logger.log(`Client connected with ID: ${clientId}`);
 
+    (ws as any)._socket?.setTimeout(5 * 60 * 1000);
+
+    const pingInterval = setInterval(() => {
+      if (ws.readyState === WebSocket.OPEN) {
+        ws.ping();
+        logger.log(`ping ${clientId}`);
+      }
+    }, 10000);
+
+    ws.on('pong', () => {
+      logger.log(`pong ${clientId}`);
+    });
+
     ws.on('message', (data, isBinary) => {
-      logger.log(`Received message from client ${clientId}`);
+      logger.log(`on-message client ${clientId}`);
       if (isBinary) {
         const broadcastCode = broadcasters.get(clientId);
         const broadcast = broadcasts.get(broadcastCode);
@@ -121,7 +134,30 @@ export const initWebSocketService = (wss: WebSocket.Server) => {
               }
             }
             break;
-
+          case EMessageType.JOIN_AUDIO:
+            {
+              const broadcast = broadcasts.get(message.code);
+              if (broadcast) {
+                broadcast.joinAudio(clientId);
+              } else {
+                logger.log('Broadcast not found');
+                ws.send(
+                  JSON.stringify({
+                    type: EMessageType.ERROR,
+                    message: 'BROADCAST_NOT_FOUND',
+                  })
+                );
+              }
+            }
+            break;
+          case EMessageType.LEAVE_AUDIO:
+            {
+              const broadcast = broadcasts.get(message.code);
+              if (broadcast) {
+                broadcast.leaveAudio(clientId);
+              }
+            }
+            break;
           case EMessageType.PUB:
             {
               const pubBroadcast = broadcasts.get(message.code);
@@ -140,6 +176,7 @@ export const initWebSocketService = (wss: WebSocket.Server) => {
     });
 
     ws.on('close', () => {
+      clearInterval(pingInterval);
       broadcasts.forEach((broadcast) => {
         broadcast.leave(clientId);
       });
