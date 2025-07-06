@@ -8,7 +8,7 @@ import { config } from './config';
 import transcribeRouter from './routes/transcribe';
 import { initWebSocketService } from './service/web-socket';
 
-const PORT = 4000; // Fixed due to docker
+const PORT = process.env.PORT || 4000;
 
 const app = express();
 app.use(express.json());
