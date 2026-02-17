@@ -8,7 +8,7 @@ import { config } from './config';
 import transcribeRouter from './routes/transcribe';
 import { initWebSocketService } from './service/web-socket';
 
-const PORT = 4000; // Fixed due to docker
+const PORT = process.env.PORT || 4000;
 
 const app = express();
 app.use(express.json());
@@ -16,6 +16,16 @@ app.use(cors());
 app.set('trust proxy', true);
 app.set('port', PORT);
 app.use('/transcribe', transcribeRouter);
+/**
+ * This endpoint is used to check if the API is ready.
+ */
+app.get('/starter.css', (req, res) => {
+  res.setHeader('Content-Type', 'text/css');
+  res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+  res.setHeader('Pragma', 'no-cache');
+  res.setHeader('Expires', '0');
+  res.send('/* API is ready and started */');
+});
 
 const server = http.createServer(app);
 const wss = new WebSocket.Server({
